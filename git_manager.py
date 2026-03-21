@@ -1,10 +1,13 @@
+import os
 import subprocess
+import os
 
 def get_git_diff():
     """
     获取当前本地暂存区(staged)的代码差异。
     相当于在命令行执行 git diff --cached
     """
+    print(f"DEBUG: 当前运行目录是 {os.getcwd()}")
     try:
         # 调用git命令
         # --unified=3 表示显示改动行及其前后各3行的上下文
