@@ -7,14 +7,12 @@ import json
 def run_smart_review():
     # 1. 获取本地 Git 的原始 Diff
     diff_raw = get_git_diff()
-    print(diff_raw)
-    if "No changes staged" in diff_raw:
+    if diff_raw == "No staged changes":
         print("💡 没有检测到暂存代码（请先执行 git add）。")
         return
 
     # 2. 调用清洗器：将原始 Diff 变成带行号的结构化列表
     parsed_diff = parse_diff(diff_raw)
-    print(parsed_diff)
 
     # 3. 构造发送给 DeepSeek 的文本（把清洗后的结果拼接成字符串）
     # 这样 AI 就能看到：File: app.py, Line: 10, Code: xxxx

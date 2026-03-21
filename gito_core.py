@@ -62,4 +62,7 @@ if __name__ == "__main__":
     print("this is seven")
     print("this is eight")
     print("this is nine")
+    print("this is ten")
+    print11
+    print(12)
 
