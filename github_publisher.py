@@ -1,18 +1,24 @@
-from github import Github
+from github import Github, Auth
 import os
 
 # 建议把 Token 放在环境变量里，不要直接写在代码里
-GITHUB_TOKEN = "MY_GITO_TOKEN"
+GITHUB_TOKEN = os.getenv("MY_GITO_TOKEN")
 REPO_NAME = "gelinwang/gito"  # 例如 "zhangsan/test-repo"
 PR_NUMBER = 1  # 你正在测试的 PR 编号
-
 
 def publish_review(issues):
     """
     将 DeepSeek 的 issue 列表提交为 GitHub PR Review
     issues 格式: [{'file': 'main.py', 'line': 10, 'issue': '...', 'suggestion': '...'}]
     """
-    g = Github(GITHUB_TOKEN)
+    # 检查 Token 是否成功获取
+    if not GITHUB_TOKEN:
+        print("❌ 错误：未能获取环境变量 MY_GITO_TOKEN，请检查系统设置。")
+        return
+
+    auth = Auth.Token(GITHUB_TOKEN)
+    g = Github(auth=auth)
+
     repo = g.get_repo(REPO_NAME)
     pr = repo.get_pull(PR_NUMBER)
 
