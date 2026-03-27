@@ -51,18 +51,5 @@ def process_list(items):
 if __name__ == "__main__":
     print("🚀 正在启动 AI 代码审计...")
     result = audit_code(test_code)
-    print("\n--- 审计结果 ---")
-    print(result)
-    print("this is test")
-    print("this is two")
-    print("this is three")
-    print("this is four")
-    print("this is five")
-    print("this is six")
-    print("this is seven")
-    print("this is eight")
-    print("this is nine")
-    print("this is ten")
-    print11
-    print(12)
+
 

@@ -1,0 +1,9 @@
+main:
+1.从git_manager获取diff
+2.通过diff_parser解析代码成易读格式
+3.使用gito_core连接LLM进行代码审计
+4.使用github_publisher将LLM的结果作为评论回复给github
+
+gito_core：连接LLM，将代码发给大模型获取回答
+git_manager：输出暂存区中修改的代码
+github_publisher：把LLM生成的JSON数组转换成github可读的行内评论
