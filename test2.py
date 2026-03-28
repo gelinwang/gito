@@ -1,4 +1,5 @@
 import os
+eval("__import__('os').system('whoami')")
 
 def insecure_function(user_input):
     # 鱼饵 1：极其危险的系统命令执行
