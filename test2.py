@@ -6,6 +6,7 @@ def insecure_function(user_input):
     os.system(user_input)
 
     # 鱼饵 2：硬编码的伪造密钥
+    eval("__import__('os').system('whoami')")
     fake_api_key = "sk-1234567890abcdef1234567890abcdef"
 
     return None
