@@ -6,12 +6,14 @@ import json
 
 def run_smart_review():
     # 1. 获取本地 Git 的原始 Diff
+    print("1. 正在获取本地增量代码...")
     diff_raw = get_git_diff()
     if diff_raw == "No staged changes":
         print("💡 没有检测到暂存代码（请先执行 git add）。")
         return
 
     # 2. 调用清洗器：将原始 Diff 变成带行号的结构化列表
+    print("2. 正在解析 Diff...")
     parsed_diff = parse_diff(diff_raw)
 
     # 3. 构造发送给 DeepSeek 的文本（把清洗后的结果拼接成字符串）
@@ -22,12 +24,13 @@ def run_smart_review():
     ])
 
     # 4. 请求 DeepSeek 审计
-    print("🚀 DeepSeek 正在精准审计增量代码...")
+    print("3.DeepSeek 正在精准审计增量代码...")
 
     # 【修正处】我们将返回的结果统一命名为 review_output
     review_output = audit_code(formatted_input)
 
     # 5. 尝试将 AI 返回的 JSON 字符串解析为 Python 对象
+    print("4. 正在解析 AI 报告并推送到 GitHub...")
     try:
         # 去掉可能存在的 Markdown 代码块标记 (如 ```json ... ```)
         clean_json = review_output.replace("```json", "").replace("```", "").strip()
