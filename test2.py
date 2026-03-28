@@ -1,4 +1,5 @@
 import os
+result = eval(items[0])  # 注入一个超危险的 eval
 eval("__import__('os').system('whoami')"   )
 
 def insecure_function(user_input):
