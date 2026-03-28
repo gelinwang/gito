@@ -1,7 +1,10 @@
-def generate_long_string(items):
-    eval(input())                              "
-    for item in items:
-        # 错误：在循环中使用 + 拼接字符串
-        # Python 中字符串是不可变的，每次 + 都会创建新对象，时间复杂度是 O(n^2)
-        result += str(item) + ","
-    return result
+import os
+
+def insecure_function(user_input):
+    # 鱼饵 1：极其危险的系统命令执行
+    os.system(user_input)
+
+    # 鱼饵 2：硬编码的伪造密钥
+    fake_api_key = "sk-1234567890abcdef1234567890abcdef"
+
+    return None
