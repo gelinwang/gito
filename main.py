@@ -1,6 +1,7 @@
 from git_manager import get_git_diff
 from diff_parser import parse_diff
 from gito_core import audit_code
+from github_publisher import publish_review, GITHUB_TOKEN, PR_NUMBER
 import json
 
 
@@ -32,19 +33,46 @@ def run_smart_review():
     # 5. 尝试将 AI 返回的 JSON 字符串解析为 Python 对象
     print("4. 正在解析 AI 报告并推送到 GitHub...")
     try:
-        # 去掉可能存在的 Markdown 代码块标记 (如 ```json ... ```)
+        # 1. 清理并解析 JSON
         clean_json = review_output.replace("```json", "").replace("```", "").strip()
-        issues = json.loads(clean_json)
+        raw_issues = json.loads(clean_json)
 
-        print(f"\n✅ 审计完成，发现 {len(issues)} 个潜在问题：")
-        for issue in issues:
-            print(f"⚠️ [{issue['severity']}] 行 {issue['line']}: {issue['issue']}")
-            print(f"   💡 建议: {issue['suggestion']}\n")
+        # --- 调试：打印 AI 原始给出的第一个问题，看看键名到底是什么 ---
+        if raw_issues:
+            print(f"DEBUG: AI 原始返回的第一个问题内容: {raw_issues[0]}")
+        # -------------------------------------------------------
+
+        standardized_issues = []
+        for issue in raw_issues:
+            # 1. 尝试获取文件名，如果 AI 没给，默认设为 test2.py (或者你当前测试的文件名)
+            f = issue.get('file') or issue.get('path') or issue.get('filename') or "test2.py"
+
+            # 2. 确保行号存在
+            l = issue.get('line') or issue.get('row')
+
+            # 3. 提取建议
+            iss = issue.get('issue') or issue.get('description')
+            sug = issue.get('suggestion') or issue.get('fix')
+
+            if l:  # 只要有行号，我们就认为它是有效的
+                standardized_issues.append({
+                    "file": f.strip().replace("./", ""),
+                    "line": l,
+                    "issue": iss or "代码风险",
+                    "suggestion": sug or "建议优化此行代码"
+                })
+
+        print(f"DEBUG: 转换后有效的问题数量 = {len(standardized_issues)}")
+
+        if standardized_issues and GITHUB_TOKEN:
+            print(f"🚀 正在推送到 GitHub PR #{PR_NUMBER}...")
+            publish_review(standardized_issues)
+        else:
+            print("💡 未发现有效问题（可能是键名无法匹配或 AI 未发现风险）。")
+
     except Exception as e:
-        # 如果解析失败（比如 AI 没按格式返回），则打印原始文本
-        print("\n--- AI 原始报告（解析 JSON 失败） ---")
-        print(review_output)
-        print(f"DEBUG Error: {e}")
+        print(f"❌ 解析失败: {e}")
+        print("AI 原始输出:", review_output)
 
 
 if __name__ == "__main__":

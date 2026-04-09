@@ -6,51 +6,55 @@ import re
 # 建议把 Token 放在环境变量里，不要直接写在代码里
 GITHUB_TOKEN = os.getenv("MY_GITO_TOKEN")
 REPO_NAME = "gelinwang/gito"  # 例如 "zhangsan/test-repo"
-PR_NUMBER = 2  # 你正在测试的 PR 编号
+PR_NUMBER = 9  # 你正在测试的 PR 编号
 
 
 # 实现从git diff的输出中找到每一行改动对应的 GitHub API position
 def get_diff_position(diff_output, target_file, target_line):
-    """
-    根据给定的文件和真实行号，找到对应的 GitHub Diff Position
-    """
     lines = diff_output.split('\n')
     found_file = False
-    new_line_counter = 0
-    position = 0  # GitHub API 要求的 Position (从 hunk header 后的第一行算 1)
+    current_new_line = 0
+    # GitHub 的 position 是从 diff 中第一个 @@ 之后的第一行开始算，初始为 0
+    # 在进入第一个 hunk 后，第一行内容会让它变为 1
+    absolute_position = 0
 
     for line in lines:
-        if line.startswith('+++ b/') and line[5:] == target_file:
-            found_file = True
+        # 修正：使用 line[6:] 并 strip，确保匹配文件名准确
+        if line.startswith('+++ b/'):
+            if line[6:].strip() == target_file:
+                found_file = True
+                continue
+            else:
+                found_file = False
+                continue
+
+        if not found_file:
             continue
 
-        if found_file:
-            if line.startswith('@@'):
-                # 提取 hunk header: @@ -old_start,old_count +new_start,new_count @@
-                import re
-                match = re.match(r'^@@ -(\d+),(\d+) \+(\d+),(\d+) @@', line)
-                if match:
-                    new_line_counter = int(match.group(3))  # 新文件的起始行号
-                    position = 0  # 重置 hunk 计数器
-                    continue
+        # 记录在当前文件内的绝对偏移
+        absolute_position += 1
 
-            elif line.startswith('+') and not line.startswith('+++'):
-                # 找到加号（新增或修改的行）
-                position += 1
-                if new_line_counter == target_line:
-                    return position  # 成功匹配！
-                new_line_counter += 1
+        if line.startswith('@@'):
+            import re
+            match = re.match(r'^@@ -\d+,\d+ \+(\d+),\d+ @@', line)
+            if match:
+                current_new_line = int(match.group(1))
+                # 注意：@@ 这一行本身不计入 position 统计，但我们要记录它之后的位置
+                # 这里不需要重置 absolute_position，因为 position 在一个文件的 diff 中是累加的
+            continue
 
-            elif line.startswith(' '):
-                # 上下文行（未改动）
-                position += 1
-                new_line_counter += 1
+        # 检查是否匹配到目标行
+        if line.startswith('+') or line.startswith(' '):
+            if current_new_line == target_line:
+                # 找到了目标行，返回相对于第一个 hunk header 的偏移量
+                # GitHub 的 position 计数包含 @@ 之后的所有行（+ - 和空格）
+                return absolute_position - 1
+            current_new_line += 1
+        elif line.startswith('-'):
+            # 删除行增加 position 计数，但不增加新文件的行号计数
+            pass
 
-            elif line.startswith('-'):
-                # 减号（删除的行），不增加真实行号，但增加 position
-                position += 1
-
-    return None  # 未找到匹配的 position
+    return None
 
 
 def publish_review(issues):
@@ -66,11 +70,23 @@ def publish_review(issues):
     # 初始化 Github 客户端
     auth = Auth.Token(GITHUB_TOKEN)
     g = Github(auth=auth)
-    repo = g.get_repo(REPO_NAME)
-    pr = repo.get_pull(PR_NUMBER)
 
-    # --- 关键点：获取该 PR 真实的 Diff 内容用于行号对齐 ---
-    # 通过 pr.patch_url 获取 GitHub 生成的补丁文件链接
+    try:
+        repo = g.get_repo(REPO_NAME)
+        # 打印一下，确认仓库是否连接成功
+        print(f"✅ 成功连接仓库: {repo.full_name}")
+
+        pr = repo.get_pull(PR_NUMBER)
+        if pr is None:
+            print(f"❌ 错误：在仓库里找不到编号为 {PR_NUMBER} 的 PR")
+            return
+
+        print(f"✅ 成功获取 PR: {pr.title}")
+    except Exception as e:
+        print(f"❌ 访问 GitHub 时发生错误: {e}")
+        return
+
+    # 只有确保 pr 不是 None，才执行下面的 patch_url
     print(f"正在从 {pr.patch_url} 获取 Diff 内容...")
     response = requests.get(pr.patch_url)
     if response.status_code != 200:
@@ -80,26 +96,33 @@ def publish_review(issues):
 
     # 获取当前 PR 的最新 Commit ID (Review 必须关联到具体的 commit)
     latest_commit = pr.get_commits().reversed[0]
+
     comments = []
-
     for issue in issues:
-        # 1. 尝试把真实行号翻译成 GitHub Position
-        pos = get_diff_position(raw_diff, issue['file'], int(issue['line']))
+        try:
+            target_line = int(issue['line'])
+        except (ValueError, TypeError):
+            continue
 
-        # 构造 GitHub 要求的评论格式
-        if pos:
+        pos = get_diff_position(raw_diff, issue['file'], target_line)
+
+        if pos is not None:  # 明确判断是否拿到了 position
             comments.append({
                 "path": issue['file'],
-                "position": pos,  # 注意：这里必须用 position 而不是 line
+                "position": pos,
                 "body": f"### 🤖 Gito AI 审计建议\n**问题**: {issue['issue']}\n**建议**: {issue['suggestion']}"
             })
-            print(f"📍 找到行号对齐：{issue['file']} Line {issue['line']} -> Position {pos}")
+            print(f"📍 找到行号对齐：{issue['file']} Line {target_line} -> Position {pos}")
         else:
-            print(f"⚠️ 忽略：{issue['file']} 的第 {issue['line']} 行不在本次 PR 修改范围内。")
+            # 如果没对齐，我们直接跳过，不要把它放进 comments 列表
+            print(f"⚠️ 跳过：{issue['file']} Line {target_line} 不在 Diff 范围内")
 
     if not comments:
         print("✅ 没发现有效的、在修改范围内的评论。")
         return
+
+    # 打印一下即将发送的评论数量，确保不是空的
+    print(f"即将提交 {len(comments)} 条有效评论...")
 
     # 一次性提交所有评论
     try:
@@ -119,7 +142,7 @@ if __name__ == "__main__":
     test_issues = [
         {
             "file": "test2.py",
-            "line": 3,
+            "line": 2,
             "issue": "硬编码测试",
             "suggestion": "请使用环境变量"
         }
